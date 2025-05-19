@@ -12,7 +12,8 @@ from zoneinfo import ZoneInfo
 load_dotenv()
 
 BOT_TOKEN = os.environ['TELEGRAM_BOT_TOKEN']
-CHAT_ID   = os.environ['TELEGRAM_CHAT_ID']   # your user ID or channel ID
+TELEGRAM_CHAT_ID = os.environ['TELEGRAM_CHAT_ID'] # your user ID or channel ID
+TELEGRAM_CHANNEL_ID = os.environ['TELEGRAM_CHANNEL_ID'] # your channel ID
 
 # Use your API key directly for now
 sugar_wod_api_key = "320e5969-fa6d-4ef4-8513-2b5af1f76f7c"
@@ -49,7 +50,8 @@ except Exception as e:
 # Send workouts to Telegram bot
 async def send_workouts_to_telegram(workouts):
     bot = Bot(token=BOT_TOKEN)
-    chat_id = os.environ['TELEGRAM_CHAT_ID']
+    chat_id = TELEGRAM_CHANNEL_ID
+    print(f"Attempting to send message to chat_id: {chat_id}")
     message = "🏋️‍♂️ *Today's Workouts:*\n\n"
     for w in workouts:
         attr = w.get("attributes", {})
