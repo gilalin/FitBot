@@ -1,73 +1,63 @@
 # a code to connect to the wod api, verify the API key using the /box endpoint, and fetch workouts using the provided link
 
-import requests
 import os
-from datetime import datetime
-from pprint import pprint
-from telegram import Bot
 from dotenv import load_dotenv
 import asyncio
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+from WorkoutAPI_Handler import WorkoutAPI_Handler
+from TelegramHandler import TelegramHandler
 
 load_dotenv()
 
 BOT_TOKEN = os.environ['TELEGRAM_BOT_TOKEN']
-TELEGRAM_CHAT_ID = os.environ['TELEGRAM_CHAT_ID'] # your user ID or channel ID
-TELEGRAM_CHANNEL_ID = os.environ['TELEGRAM_CHANNEL_ID'] # your channel ID
+# Keep personal chat ID for potential personal notifications
+TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
+TELEGRAM_CHANNEL_ID = os.environ.get('TELEGRAM_CHANNEL_ID')
+SUGARWOD_API_KEY = os.environ['SUGARWOD_API_KEY']
 
-# Use your API key directly for now
-sugar_wod_api_key = "320e5969-fa6d-4ef4-8513-2b5af1f76f7c"
-headers = {"Authorization": sugar_wod_api_key}
+BASE_URL = "https://api.sugarwod.com/v2"
 
-# Use api.sugarwod.com as the base URL
-base_url = "https://api.sugarwod.com/v2"
+async def main():
+    # Initialize handlers
+    workout_api_handler = WorkoutAPI_Handler(BASE_URL, SUGARWOD_API_KEY)
+    telegram_handler = TelegramHandler(BOT_TOKEN)
 
-# Step 1: Get /box info and extract tracks link
-box_url = f"{base_url}/box"
-# Get today's date in Israel time (Asia/Jerusalem)
-israel_now = datetime.now(ZoneInfo("Asia/Jerusalem"))
-today = israel_now.strftime("%Y%m%d")
-workouts_url = f"{base_url}/workouts?dates={today}"
-workouts_response = requests.get(workouts_url, headers=headers)
-try:
-    workouts_data = workouts_response.json()
-    workouts = workouts_data.get("data", [])
-    if workouts:
-        print("Today's Workouts:")
-        for w in workouts:
-            attr = w.get("attributes", {})
-            title = attr.get("title", "N/A")
-            date = attr.get("scheduled_date", "N/A")
-            description = attr.get("description", "N/A")
-            print(f"\nTitle: {title}\nDate: {date}\nDescription: {description}\n{'-'*40}")
+    # Get today's and tomorrow's dates in Israel time (Asia/Jerusalem)
+    try:
+        israel_tz = ZoneInfo("Asia/Jerusalem")
+        today_date = datetime.now(israel_tz)
+        tomorrow_date = today_date + timedelta(days=1)
+        today_str = today_date.strftime("%Y%m%d")
+        tomorrow_str = tomorrow_date.strftime("%Y%m%d")
+    except Exception as e:
+        print(f"Error getting Israel time for dates: {e}")
+        # Fallback to UTC if timezone fails
+        utc_now = datetime.utcnow()
+        today_str = utc_now.strftime("%Y%m%d")
+        tomorrow_str = (utc_now + timedelta(days=1)).strftime("%Y%m%d")
+        print("Using UTC dates as fallback.")
+
+    # Fetch today's and tomorrow's workouts
+    today_workouts = workout_api_handler.get_workouts_for_date(today_str)
+    tomorrow_workouts = workout_api_handler.get_workouts_for_date(tomorrow_str)
+
+    # Combine workouts and prepare message
+    all_workouts = today_workouts + tomorrow_workouts
+
+    # Send workouts to the channel
+    if TELEGRAM_CHANNEL_ID:
+        await telegram_handler.send_workout_message(TELEGRAM_CHANNEL_ID, all_workouts, include_tomorrow_check=True)
     else:
-        print("No workouts found for today.")
-except Exception as e:
-    print("Failed to decode JSON from /workouts response. Raw response:")
-    print(workouts_response.text)
-    exit()
+        print("TELEGRAM_CHANNEL_ID not set in environment variables.")
 
-# Send workouts to Telegram bot
-async def send_workouts_to_telegram(workouts):
-    bot = Bot(token=BOT_TOKEN)
-    chat_id = TELEGRAM_CHANNEL_ID
-    print(f"Attempting to send message to chat_id: {chat_id}")
-    message = "🏋️‍♂️ *Today's Workouts:*\n\n"
-    for w in workouts:
-        attr = w.get("attributes", {})
-        title = attr.get("title", "N/A")
-        date = attr.get("scheduled_date", "N/A")
-        description = attr.get("description", "N/A")
-        message += (
-            "🔹 *Title*: " + title + "\n" +
-            "📆 *Date*: " + date[:10] + "\n" +
-            "📝 *Description*: " + description + "\n" +
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        )
-    await bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown')
+    # Optional: Send to personal chat as well
+    # if TELEGRAM_CHAT_ID:
+    #     await telegram_handler.send_workout_message(TELEGRAM_CHAT_ID, all_workouts)
+    # else:
+    #     print("TELEGRAM_CHAT_ID not set in environment variables.")
 
-# Run the async function to send workouts
 if __name__ == '__main__':
-    asyncio.run(send_workouts_to_telegram(workouts))
+    asyncio.run(main())
 
 # Analyze the output above to determine next steps for filtering or debugging.
