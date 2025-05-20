@@ -9,37 +9,46 @@ class TelegramHandler:
 
     async def send_workout_message(self, chat_id, workouts, include_tomorrow_check=False):
         """Sends formatted workout message to the specified chat ID."""
-        message = "🏋️‍♂️ *Today's Workouts:*\n\n"
-        
-        today_has_workouts = any(w.get("attributes", {}).get("scheduled_date", "").startswith(datetime.now(ZoneInfo("Asia/Jerusalem")).strftime("%Y-%m-%d")) for w in workouts)
+        today_date_str_compare = datetime.now(ZoneInfo("Asia/Jerusalem")).strftime("%Y-%m-%d")
+        tomorrow_date_str_compare = (datetime.now(ZoneInfo("Asia/Jerusalem")) + timedelta(days=1)).strftime("%Y-%m-%d")
 
-        if not today_has_workouts and not include_tomorrow_check:
-             message = "No workouts found for today."
+        today_workouts = [w for w in workouts if w.get("attributes", {}).get("scheduled_date", "").startswith(today_date_str_compare)]
+        tomorrow_workouts = [w for w in workouts if w.get("attributes", {}).get("scheduled_date", "").startswith(tomorrow_date_str_compare)]
+
+        message = "🏋️‍♂️ *CrossFit Hatira WODs* 🏋️‍♀️\n\n"
+
+        # Add Today's Workouts
+        message += "📅 *Today's Workouts: ({})*\n\n".format(today_date_str_compare)
+        if not today_workouts:
+            message += "_No workouts found for today._\n"
         else:
-            for w in workouts:
+            for w in today_workouts:
                 attr = w.get("attributes", {})
                 title = attr.get("title", "N/A")
-                # Extract only the date part (YYYY-MM-DD) from the scheduled_date
-                date_full = attr.get("scheduled_date", "N/A")
-                date_part = date_full[:10] if date_full != "N/A" else "N/A"
                 description = attr.get("description", "N/A")
 
                 message += (
                     "🔹 *Title*: " + title + "\n" +
-                    "📆 *Date*: " + date_part + "\n" +
                     "📝 *Description*: " + description + "\n" +
                     "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                 )
 
-            if include_tomorrow_check:
-                # Check if any workout in the list is for tomorrow
-                tomorrow_date = datetime.now(ZoneInfo("Asia/Jerusalem")) + timedelta(days=1)
-                tomorrow_date_str = tomorrow_date.strftime("%Y-%m-%d")
-                tomorrow_has_workouts = any(w.get("attributes", {}).get("scheduled_date", "").startswith(tomorrow_date_str) for w in workouts)
+        # Add Tomorrow's Workouts if requested
+        if include_tomorrow_check:
+            message += "\n📅 *Tomorrow's Workouts: ({})*\n\n".format(tomorrow_date_str_compare)
+            if not tomorrow_workouts:
+                message += "⚠️ _Sorry… Tomorrow's WOD hasn't been published yet._\n"
+            else:
+                for w in tomorrow_workouts:
+                    attr = w.get("attributes", {})
+                    title = attr.get("title", "N/A")
+                    description = attr.get("description", "N/A")
 
-                if not tomorrow_has_workouts:
-                    message += "\n⚠️ Sorry… Tomorrow's WOD hasn't been published yet."
-
+                    message += (
+                        "🔹 *Title*: " + title + "\n" +
+                        "📝 *Description*: " + description + "\n" +
+                        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    )
 
         try:
             await self.bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown')
