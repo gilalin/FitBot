@@ -1,19 +1,8 @@
-# bot.py
 import os
 import requests
 from dotenv import load_dotenv
-from telegram import (
-    Update,
-    BotCommand,
-    ReplyKeyboardMarkup,
-    KeyboardButton,
-)
-from telegram.ext import (
-    Application,
-    ApplicationBuilder,
-    CommandHandler,
-    CallbackContext,
-)
+from telegram import Update, BotCommand, ReplyKeyboardMarkup, KeyboardButton
+from telegram.ext import Application, ApplicationBuilder, CommandHandler, MessageHandler, filters, CallbackContext
 
 load_dotenv()
 
@@ -28,41 +17,43 @@ def _load_subscribers():
     except FileNotFoundError:
         return set()
 
+
 def _save_subscribers(subs):
     with open(SUBSCRIBERS_FILE, 'w') as f:
         f.write('\n'.join(subs))
 
 
-def start(update: Update, context: CallbackContext):
+async def start(update: Update, context: CallbackContext):
     chat_id = str(update.effective_chat.id)
     subs = _load_subscribers()
     if chat_id in subs:
-        update.message.reply_text("✅ You're already subscribed!")
+        await update.message.reply_text("✅ You're already subscribed!", reply_markup=main_menu_keyboard())
     else:
         subs.add(chat_id)
         _save_subscribers(subs)
-        update.message.reply_text(
+        await update.message.reply_text(
             "🎉 Subscribed! You'll get daily workouts here.\n\n"
             "Use the menu below to see available commands.",
             reply_markup=main_menu_keyboard()
         )
 
-def stop(update: Update, context: CallbackContext):
+async def stop(update: Update, context: CallbackContext):
     chat_id = str(update.effective_chat.id)
     subs = _load_subscribers()
     if chat_id in subs:
         subs.remove(chat_id)
         _save_subscribers(subs)
-        update.message.reply_text("🛑 Unsubscribed. You will no longer receive messages.")
+        await update.message.reply_text("🛑 Unsubscribed. You will no longer receive messages.", reply_markup=main_menu_keyboard())
     else:
-        update.message.reply_text("ℹ️ You weren't subscribed.")
+        await update.message.reply_text("ℹ️ You weren't subscribed.", reply_markup=main_menu_keyboard())
 
-def upload_workout(update: Update, context: CallbackContext):
-    update.message.reply_text(
-        "📤 Great! Send me a photo or data file of your workout, and I'll run it through our AI analyzer (coming soon…).",
+async def upload_workout(update: Update, context: CallbackContext):
+    await update.message.reply_text(
+        "📤 Great! Send me a photo or data file of your workout, and I'll run it through our AI analyzer (coming soon...)",
         reply_markup=main_menu_keyboard()
     )
-    # later, you'll add a MessageHandler here to catch and process the upload
+    # Future: MessageHandler for filters.PHOTO | filters.Document to handle uploads
+
 
 def main_menu_keyboard():
     buttons = [
@@ -71,31 +62,34 @@ def main_menu_keyboard():
     ]
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True, one_time_keyboard=False)
 
-
-def register_bot_commands(application: Application):
+async def register_bot_commands(application: Application):
     commands = [
         BotCommand("start", "Subscribe to daily workouts"),
         BotCommand("stop", "Unsubscribe"),
         BotCommand("upload_workout", "Upload workout for AI analysis")
     ]
-    application.bot.set_my_commands(commands)
+    await application.bot.set_my_commands(commands)
 
 
 def main():
-    application = ApplicationBuilder().token(BOT_TOKEN).build()
+    application = (
+        ApplicationBuilder()
+        .token(BOT_TOKEN)
+        .post_init(register_bot_commands)
+        .build()
+    )
 
-    # register handlers
+    # Register command handlers
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("stop",  stop))
+    application.add_handler(CommandHandler("stop", stop))
     application.add_handler(CommandHandler("upload_workout", upload_workout))
 
-    # (future) application.add_handler(MessageHandler(Filters.photo | Filters.document, handle_upload))
+    # Placeholder for upload handler
+    # application.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, handle_upload))
 
-    # set up the "/menu"
-    register_bot_commands(application)
-
-    # start
+    # Start the bot
     application.run_polling()
+
 
 if __name__ == "__main__":
     main()
