@@ -28,6 +28,8 @@ async def start(update: Update, context: CallbackContext):
     subs = _load_subscribers()
     if chat_id in subs:
         await update.message.reply_text("✅ You're already subscribed!", reply_markup=main_menu_keyboard())
+        workout_data = workout_api_handler.get_workouts_for_date(today_str)
+        await update.message.reply_text(workout_data, reply_markup=main_menu_keyboard())
     else:
         subs.add(chat_id)
         _save_subscribers(subs)
