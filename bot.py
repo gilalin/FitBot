@@ -3,11 +3,15 @@ import requests
 from dotenv import load_dotenv
 from telegram import Update, BotCommand, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, ApplicationBuilder, CommandHandler, MessageHandler, filters, CallbackContext
+from TelegramHandler import TelegramHandler
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 load_dotenv()
 
 BOT_TOKEN = os.environ['TELEGRAM_BOT_TOKEN']
 SUBSCRIBERS_FILE = 'subscribers.txt'
+telegram_handler = TelegramHandler(BOT_TOKEN)
 
 
 def _load_subscribers():
@@ -27,8 +31,11 @@ async def start(update: Update, context: CallbackContext):
     chat_id = str(update.effective_chat.id)
     subs = _load_subscribers()
     if chat_id in subs:
-        workout_data = workout_api_handler.get_workouts_for_date(today_str)
-        await update.message.reply_text(f"✅ You're already subscribed! + {workout_data}", reply_markup=main_menu_keyboard())
+        today_str = datetime.now(ZoneInfo("Asia/Jerusalem")).strftime("%Y-%m-%d")
+        # Get workout data and send it using the telegram handler
+        workout_data = []  # Replace this with actual workout data from your API
+        await telegram_handler.send_workout_message(chat_id, workout_data, include_tomorrow_check=True)
+        await update.message.reply_text("✅ You're already subscribed!", reply_markup=main_menu_keyboard())
     else:
         subs.add(chat_id)
         _save_subscribers(subs)
