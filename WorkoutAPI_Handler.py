@@ -21,6 +21,10 @@ class WorkoutAPI_Handler:
                 # Fallback to UTC if timezone fails
                 date_str = datetime.utcnow().strftime("%Y%m%d")
                 print("Using UTC date as fallback.")
+        else:
+            # Convert YYYY-MM-DD to YYYYMMDD if needed
+            if '-' in date_str:
+                date_str = date_str.replace('-', '')
 
         workouts_url = f"{self.base_url}/workouts?dates={date_str}"
         print(f"Fetching workouts from: {workouts_url}")

@@ -4,15 +4,18 @@ from dotenv import load_dotenv
 from telegram import Update, BotCommand, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, ApplicationBuilder, CommandHandler, MessageHandler, filters, CallbackContext
 from TelegramHandler import TelegramHandler
+from WorkoutAPI_Handler import WorkoutAPI_Handler
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 load_dotenv()
 
 BOT_TOKEN = os.environ['TELEGRAM_BOT_TOKEN']
+SUGARWOD_API_KEY = os.environ['SUGARWOD_API_KEY']
+SUGARWOD_API_URL = "https://api.sugarwod.com/v2"
 SUBSCRIBERS_FILE = 'subscribers.txt'
 telegram_handler = TelegramHandler(BOT_TOKEN)
-
+workout_api_handler = WorkoutAPI_Handler(SUGARWOD_API_URL, SUGARWOD_API_KEY)
 
 def _load_subscribers():
     try:
@@ -32,9 +35,6 @@ async def start(update: Update, context: CallbackContext):
     subs = _load_subscribers()
     if chat_id in subs:
         today_str = datetime.now(ZoneInfo("Asia/Jerusalem")).strftime("%Y-%m-%d")
-        # Get workout data and send it using the telegram handler
-        workout_data = []  # Replace this with actual workout data from your API
-        await telegram_handler.send_workout_message(chat_id, workout_data, include_tomorrow_check=True)
         await update.message.reply_text("✅ You're already subscribed!", reply_markup=main_menu_keyboard())
     else:
         subs.add(chat_id)
@@ -62,11 +62,29 @@ async def upload_workout(update: Update, context: CallbackContext):
     )
     # Future: MessageHandler for filters.PHOTO | filters.Document to handle uploads
 
+async def get_wod(update: Update, context: CallbackContext):
+    try:
+        today_str = datetime.now(ZoneInfo("Asia/Jerusalem")).strftime("%Y-%m-%d")
+        workout_data = workout_api_handler.get_workouts_for_date(today_str)
+        if not workout_data:
+            await update.message.reply_text(
+                "ℹ️ No workouts found for today.",
+                reply_markup=main_menu_keyboard()
+            )
+            return
+        await telegram_handler.send_workout_message(update.effective_chat.id, workout_data, include_tomorrow_check=True)
+    except Exception as e:
+        await update.message.reply_text(
+            f"❌ Sorry, there was an error fetching the workouts: {str(e)}",
+            reply_markup=main_menu_keyboard()
+        )
+
 
 def main_menu_keyboard():
     buttons = [
         [KeyboardButton("/start"), KeyboardButton("/stop")],
-        [KeyboardButton("/upload_workout")]
+        [KeyboardButton("/upload_workout")],
+        [KeyboardButton("/get_wod")]
     ]
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True, one_time_keyboard=False)
 
@@ -74,7 +92,8 @@ async def register_bot_commands(application: Application):
     commands = [
         BotCommand("start", "Subscribe to daily workouts"),
         BotCommand("stop", "Unsubscribe"),
-        BotCommand("upload_workout", "Upload workout for AI analysis")
+        BotCommand("upload_workout", "Upload workout for AI analysis"),
+        BotCommand("get_wod", "Get today's workout")
     ]
     await application.bot.set_my_commands(commands)
 
@@ -89,6 +108,7 @@ def main():
 
     # Register command handlers
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("get_wod", get_wod))
     application.add_handler(CommandHandler("stop", stop))
     application.add_handler(CommandHandler("upload_workout", upload_workout))
 
