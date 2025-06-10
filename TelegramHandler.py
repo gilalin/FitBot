@@ -33,7 +33,7 @@ class TelegramHandler:
                     "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                 )
 
-        # Add Tomorrow's Workouts if requested
+        # Only add Tomorrow's Workouts section if include_tomorrow_check is True
         if include_tomorrow_check:
             message += "\n📅 *Tomorrow's Workouts: ({})*\n\n".format(tomorrow_date_str_compare)
             if not tomorrow_workouts:

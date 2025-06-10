@@ -5,6 +5,7 @@ from telegram import Update, BotCommand, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, ApplicationBuilder, CommandHandler, MessageHandler, filters, CallbackContext
 from TelegramHandler import TelegramHandler
 from WorkoutAPI_Handler import WorkoutAPI_Handler
+from OpenAIHandler import OpenAIHandler
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -16,6 +17,7 @@ SUGARWOD_API_URL = "https://api.sugarwod.com/v2"
 SUBSCRIBERS_FILE = 'subscribers.txt'
 telegram_handler = TelegramHandler(BOT_TOKEN)
 workout_api_handler = WorkoutAPI_Handler(SUGARWOD_API_URL, SUGARWOD_API_KEY)
+openai_handler = OpenAIHandler()
 
 def _load_subscribers():
     try:
@@ -79,12 +81,50 @@ async def get_wod(update: Update, context: CallbackContext):
             reply_markup=main_menu_keyboard()
         )
 
+async def analyze_workout(update: Update, context: CallbackContext):
+    """Analyzes today's workout using OpenAI."""
+    try:
+        today_str = datetime.now(ZoneInfo("Asia/Jerusalem")).strftime("%Y-%m-%d")
+        workout_data = workout_api_handler.get_workouts_for_date(today_str, include_tomorrow=False)
+        
+        if not workout_data:
+            await update.message.reply_text(
+                "ℹ️ No workouts found for today to analyze.",
+                reply_markup=main_menu_keyboard()
+            )
+            return
+            
+        # Send a "thinking" message
+        thinking_message = await update.message.reply_text(
+            "🤔 Analyzing today's workout... This might take a moment.",
+            reply_markup=main_menu_keyboard()
+        )
+        
+        # Get the analysis
+        analysis = openai_handler.analyze_workout(workout_data)
+        
+        # Send the analysis
+        await update.message.reply_text(
+            f"📊 *Workout Analysis*\n\n{analysis}",
+            parse_mode='Markdown',
+            reply_markup=main_menu_keyboard()
+        )
+        
+        # Delete the thinking message
+        await thinking_message.delete()
+        
+    except Exception as e:
+        await update.message.reply_text(
+            f"❌ Sorry, there was an error analyzing the workout: {str(e)}",
+            reply_markup=main_menu_keyboard()
+        )
 
 def main_menu_keyboard():
     buttons = [
         [KeyboardButton("/start"), KeyboardButton("/stop")],
         [KeyboardButton("/upload_workout")],
-        [KeyboardButton("/get_wod")]
+        [KeyboardButton("/get_wod")],
+        [KeyboardButton("/analyze_workout")]
     ]
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True, one_time_keyboard=False)
 
@@ -93,7 +133,8 @@ async def register_bot_commands(application: Application):
         BotCommand("start", "Subscribe to daily workouts"),
         BotCommand("stop", "Unsubscribe"),
         BotCommand("upload_workout", "Upload workout for AI analysis"),
-        BotCommand("get_wod", "Get today's workout")
+        BotCommand("get_wod", "Get today's workout"),
+        BotCommand("analyze_workout", "Get AI analysis of today's workout")
     ]
     await application.bot.set_my_commands(commands)
 
@@ -111,6 +152,7 @@ def main():
     application.add_handler(CommandHandler("get_wod", get_wod))
     application.add_handler(CommandHandler("stop", stop))
     application.add_handler(CommandHandler("upload_workout", upload_workout))
+    application.add_handler(CommandHandler("analyze_workout", analyze_workout))
 
     # Placeholder for upload handler
     # application.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, handle_upload))
